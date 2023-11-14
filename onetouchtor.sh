@@ -1,5 +1,5 @@
 #!/bin/bash
-#Purpose: Automate XMR Tor Hidden Service
+#Purpose: Automate Tor Hidden Service Generation
 # START #
 # Title Bar
 title="Tor Hidden Service Configurator"
@@ -11,8 +11,9 @@ printf "%${COLUMNS}s" " " | tr " " "*"
 printf "%${span}s\n" "$title"
 printf "%${COLUMNS}s" " " | tr " " "*"
 
-# Get started
-read -p "Lets setup a hidden service, shall we? [Press Enter]"
+# Get started prompts
+TOR_HS=/var/lib/tor/$hsdir
+read -p "Lets setup a hidden service, shall we? [Press Enter to cont]"
 # Hidden Servide Directory creation
 while [ "$confirm_hs" != "Confirmed" ]; do
 	echo -e "\n\nDesired name of the HiddenService directory"
@@ -25,18 +26,54 @@ while [ "$confirm_hs" != "Confirmed" ]; do
 	*) echo -e "Try again!\n\n";;
 	esac)
 done
-printf "$confirm_hs\n\n"
-TOR_HS=/var/lib/tor/$hsdir
+# Hidden Servide internal port assign
+while [ "$confirm_port" != "Confirmed" ]; do
+	echo -e "\n\nWhat port is your service running on?"
+	read -p "[example: 18089] " localport
+        echo -e "You entered: $localport\n"
+	read -p "Is this correct? [y/N]: " confirm
+	confirm_port=$(
+	case "$confirm" in
+        y|Y) echo -e "Confirmed";;
+	*) echo -e "Try again!\n\n";;
+	esac)
+done
+# Hidden Servide external port assign
+while [ "$confirm_extport" != "Confirmed" ]; do
+	echo -e "\n\nEnter the port for the onion"
+	read -p "[example: 18089] " onionport
+        echo -e "You entered: $onionport\n"
+	read -p "Is this correct? [y/N]: " confirm
+	confirm_extport=$(
+	case "$confirm" in
+        y|Y) echo -e "Confirmed";;
+	*) echo -e "Try again!\n\n";;
+	esac)
+done
+# Read Values
+echo -e "HiddenServiceDir $TOR_HS"
+echo -e "HiddenServicePort $onionport 127.0.0.1:$localport"
+read -p "Does this look good? [y/N]" abort
+	case $abort in
+		y|Y) echo "good";;
+		*) echo "abort";;
+	esac
+if [ $abort = "abort" ]; then
+exit 0
+fi
+printf "$confirm_hs"
 
 # Step 1: Install Tor
 echo "Installing Tor..."
 apt install tor -y
 
 # Step 2: Edit torrc file
-cp /etc/tor/torrc /etc/tor/torrc."$DATE"
+cp /etc/tor/torrc /etc/tor/torrc.old
+# Check if already configured
 # -E, --extended-regexp : Interpret PATTERNS as extended regular expressions
-HS=$(grep -E [0123]{5}$ /etc/tor/torrc)
+HS=$(grep -E [$hsport]{5}$ /etc/tor/torrc)
 HSDIR=$(grep -E $hsdir /etc/tor/torrc)
+
 if [[ -n "$HS" && -n "$HSDIR" ]]; then
 	printf "\n\n$HSDIR\n$HS\n\nAbove Hidden Service files already exist, so skipping\n\n"
 else
@@ -51,7 +88,7 @@ s"|#HiddenServicePort 22 127.0.0.1:22\
 \n|#HiddenServicePort 22 127.0.0.1:22\n\
 \n# $hsdir Hidden Service\
 \nHiddenServiceDir $TOR_HS\
-\nHiddenServicePort 80 127.0.2.1:23001\n|" /etc/tor/torrc
+\nHiddenServicePort $onionport 127.0.0.1:$localport\n|" /etc/tor/torrc
 fi
 
 #Step 4: Start Tor to generate hostname (onion address) in /var/lib/tor/
