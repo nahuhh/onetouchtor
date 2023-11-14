@@ -41,8 +41,7 @@ until [ "$confirmed" = "Confirmed" ]; do
 
 	# Read Values
 	TOR_HS=/var/lib/tor/$hsdir
-	torrcwrite="\nHiddenServiceDir $TOR_HS\nHiddenServicePort $onionport 127.0.0.1:$localport\n"		# Variable for sed input
-	torrcreplace1="\nHiddenServiceDir $TOR_HS\nHiddenServicePort $onionport 127.0.0.1:$localport\n" 	# Variable for sed replacement if adding second service but first is configured
+	torrcwrite="HiddenServiceDir $TOR_HS\nHiddenServicePort $onionport 127.0.0.1:$localport"		# Variable for sed input
 
 	# Do we add services to the onion?
 	read -p $'\nWould you like to add another service to this Onion? [y/N] ' addservice
@@ -54,8 +53,7 @@ until [ "$confirmed" = "Confirmed" ]; do
 	if [ "$additional" = "add" ]; then
 		read -p $'\nEnter the port for the .onion domain\n[example: 18084] ' onionport2
 		read -p $'\nEnter the local port which your service will run on\n[example: 18084] ' localport2
-		torrcwrite="\nHiddenServiceDir $TOR_HS\nHiddenServicePort $onionport 127.0.0.1:$localport\nHiddenServicePort $onionport2 127.0.0.1:$localport2\n"		# Variable for sed  input
-		torrcreplace2="\nHiddenServiceDir $TOR_HS\nHiddenServicePort $onionport2 127.0.0.1:$localport2\n"		# Variable for sed replacement
+		torrcwrite="HiddenServiceDir $TOR_HS\nHiddenServicePort $onionport 127.0.0.1:$localport\nHiddenServicePort $onionport2 127.0.0.1:$localport2"		# Variable for sed  input
 	fi
 
 	# Confirm all Details
@@ -102,27 +100,35 @@ if [[ "$onionport2" && "localport2" ]]; then
 	ONIONPORT2=$(grep -E $onionport2 /etc/tor/torrc)
 	LOCALPORT2=$(grep -E $localport2 /etc/tor/torrc)
 	if [[ "$ONIONPORT" && "$LOCALPORT" && "$ONIONPORT2" && "$LOCALPORT2" && "$HSDIR" ]]; then
-		$cyan; echo -e "\n$HSDIR2\n$LOCALPORT\n$LOCALPORT2\n\nAbove Hidden Service(s) have existing configurations, so skipping\n"
+		$cyan; echo -e "\n$HSDIR2\n$LOCALPORT\n$LOCALPORT2\n\nAbove Hidden Service(s) were found to be configured, so skipping\n"
 		$nocolor
 		sleep 2
-	elif [[ "$ONIONPORT" && "$LOCALPORT" && "$HSDIR" ]]; then
+	elif [[ "$HSDIR" && "$ONIONPORT" ]] || [[ "$HSDIR" && "$ONIONPORT2" ]]; then
+		$cyan; echo -e "\n$HSDIR2\n$ONIONPORT\n$ONIONPORT2\n\nAbove Hidden Service(s) have conflicting configurations, so skipping.\n"
+		$nocolor
+		sleep 2
+	elif [[ "$HSDIR" ]]; then
 		echo "Partially configured.. fixing"
-		sed -i -z s"|$torrcreplace1|$torrcwrite|" /etc/tor/torrc
-	elif [[ "$ONIONPORT2" && "$LOCALPORT2" && "$HSDIR" ]]; then
-		echo "Partially configured.. fixing"
-		sed -i -z s"|$torrcreplace2|$torrcwrite|" /etc/tor/torrc
+		sed -i -z s"|$HSDIR2|$torrcwrite|" /etc/tor/torrc
 	else
 		echo "Editing torrc file..."
-		sed -i -z s"|#HiddenServicePort 22 127.0.0.1:22\n|#HiddenServicePort 22 127.0.0.1:22\n\n# $hsdir Hidden Service$torrcwrite|" /etc/tor/torrc
+		sed -i -z s"|HiddenServicePort 22 127.0.0.1:22\n|HiddenServicePort 22 127.0.0.1:22\n\n# $hsdir Hidden Service\n$torrcwrite\n|" /etc/tor/torrc
 	fi
 else
-	if [[ "$ONIONPORT" && "$LOCALPORT" && "$HSDIR" ]]; then
-		$cyan; echo -e "\n$HSDIR2\n$LOCALPORT\n\nAbove Hidden Service(s) have existing configurations, so skipping\n"
+	if [[ "$LOCALPORT" && "$ONIONPORT" && "$HSDIR" ]]; then
+		$cyan; echo -e "\n$HSDIR2\n$ONIONPORT\n\nAbove Hidden Service(s) have existing configurations, so skipping\n"
 		$nocolor
 		sleep 2
+	elif [[ "$ONIONPORT" && "$HSDIR" ]]; then
+		$cyan; echo -e "\n$HSDIR2\n$ONIONPORT\n\nAbove Hidden Service(s) have conflicting configurations $onionport, so skipping\n"
+		$nocolor
+		sleep 2
+	elif [[ "$HSDIR" ]]; then
+		echo "Partially configured.. fixing"
+		sed -i -z s"|$HSDIR2|$torrcwrite|" /etc/tor/torrc
 	else
 		echo "Editing torrc file..."
-		sed -i -z s"|#HiddenServicePort 22 127.0.0.1:22\n|#HiddenServicePort 22 127.0.0.1:22\n\n# $hsdir Hidden Service$torrcwrite|" /etc/tor/torrc
+		sed -i -z s"|HiddenServicePort 22 127.0.0.1:22\n|HiddenServicePort 22 127.0.0.1:22\n\n# $hsdir Hidden Service\n$torrcwrite\n|" /etc/tor/torrc
 	fi
 fi
 
@@ -147,4 +153,3 @@ span=$(((COLUMNS + title_size) / 2))
 printf "%${COLUMNS}s" " " | tr " " "*"
 $green; printf "%${span}s\n" "$footer"; $nocolor
 printf "%${COLUMNS}s" " " | tr " " "*"
-# sed -i s"/\$ONION/$ONION/" .btcpayserver/Main/settings.config
