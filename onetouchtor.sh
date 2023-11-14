@@ -13,7 +13,11 @@ printf "%${COLUMNS}s" " " | tr " " "*"
 
 # Get started prompts
 read -p "Lets setup a hidden service, shall we? [Press Enter to cont]"
-until [ "$proceed" = "good" ]; do
+if [ "$USER" != "root" ]; then
+echo -e "\n\nRTFM asshole. This script must be run as root.\nYou'll need to run \"sudo su\" first, please and thanks."
+exit 0
+fi
+until [ "$proceed" = "Good" ]; do
 	# Hidden Servide Directory assign
 	echo -e "\n\nDesired name for the HiddenService directory"
 	read -p "[example: monero] " hsdir
@@ -23,21 +27,41 @@ until [ "$proceed" = "good" ]; do
 	read -p "[example: 18089] " localport
 	# Read Values
 	TOR_HS=/var/lib/tor/$hsdir
-	echo -e "\nHiddenServiceDir $TOR_HS"
-	echo -e "HiddenServicePort $onionport 127.0.0.1:$localport\n"
+	torrcinput="\nHiddenServiceDir $TOR_HS\nHiddenServicePort $onionport 127.0.0.1:$localport\n"
+	# Do we add services to the onion?
+	read -p "Would you like to add another service to this Onion? [y/N]" addservice
+	additional=$(
+		case $addservice in
+			y|Y) echo "add";;
+			*) echo "finished";;
+		esac)
+		if [ "$additional" = "add" ]; then
+			echo -e "\nEnter the port for the .onion domain"
+			read -p "[example: 18084] " onionport2
+        		echo -e "\nEnter the local port that your service"
+			read -p "[example: 18084] " localport2
+			# Confirm all details
+			torrcinput="\nHiddenServiceDir $TOR_HS\nHiddenServicePort $onionport 127.0.0.1:$localport\nHiddenServicePort $onionport2 127.0.0.1:$localport2\n"
+		fi
+	echo -e "$torrcinput"
 	read -p "Does this look good? [y/N] " abort
 	proceed=$(
-	case $abort in
-		y|Y) echo -e "good";;
-		*) echo "Try again" && confirm_port= && confirm_extport= && confirm_hs= ;;
-	esac)
+		case $abort in
+			y|Y) echo -e "Good";;
+			*) echo "Try again" && confirm_port= && confirm_extport= && confirm_hs= ;;
+		esac)
 	printf "$proceed\n\n"
 done
 
 # Step 1: Install Tor
-echo "Installing Tor..."
-sleep 1
-apt install tor -y
+torinstall=$(apt-cache policy tor | grep "Installed:" | grep -E -o "[0-9]\w+")
+if [  "$torinstall" ]; then
+	echo "Tor is already installed"
+else
+	echo "Installing Tor..."
+	sleep 1
+	apt install tor -y
+fi
 
 # Step 2: Edit torrc file
 cp /etc/tor/torrc /etc/tor/torrc.old
@@ -56,12 +80,7 @@ else
         chmod 700 $TOR_HS
         chown -R debian-tor:debian-tor $TOR_HS
 	echo "Editing torrc file..."
-	sed -i -z \
-s"|#HiddenServicePort 22 127.0.0.1:22\
-\n|#HiddenServicePort 22 127.0.0.1:22\n\
-\n# $hsdir Hidden Service\
-\nHiddenServiceDir $TOR_HS\
-\nHiddenServicePort $onionport 127.0.0.1:$localport\n|" /etc/tor/torrc
+	sed -i -z s"|#HiddenServicePort 22 127.0.0.1:22\n|#HiddenServicePort 22 127.0.0.1:22\n\n# $hsdir Hidden Service$torrcinput|" /etc/tor/torrc
 fi
 
 #Step 4: Start Tor to generate hostname (onion address) in /var/lib/tor/
