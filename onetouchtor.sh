@@ -17,7 +17,7 @@ read -p "Lets setup a hidden service, shall we? [Press Enter]"
 while [ "$confirm_hs" != "Confirmed" ]; do
 	echo -e "\n\nDesired name of the HiddenService directory"
 	read -p "[example: monero] " hsdir
-        echo "You entered: $hsdir"
+        echo -e "You entered: $hsdir\n"
 	read -p "Is this correct? [y/N]: " confirm
 	confirm_hs=$(
 	case "$confirm" in
@@ -25,7 +25,7 @@ while [ "$confirm_hs" != "Confirmed" ]; do
 	*) echo -e "Try again!\n\n";;
 	esac)
 done
-printf "\n$confirm_hs\n\n"
+printf "$confirm_hs\n\n"
 TOR_HS=/var/lib/tor/$hsdir
 
 # Step 1: Install Tor
@@ -63,5 +63,15 @@ if ! [ -e $TOR_HS/hostname ]; then
         echo "Copying hostname..."
         sleep 2
 fi
-echo -e "\n\nYour Onion address is $ONION\n\n"
+
+footer="Your Onion address is: $ONION"
+COLUMNS=$(tput cols)
+title_size=${#footer}
+# Note $ is not needed before numeric variables
+span=$(((COLUMNS + title_size) / 2))
+printf "%${COLUMNS}s" " " | tr " " "*"
+printf "%${span}s\n" "$footer"
+printf "%${COLUMNS}s" " " | tr " " "*"
+
+
 sed -i s"/\$ONION/$ONION/" .btcpayserver/Main/settings.config
