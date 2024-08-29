@@ -81,14 +81,6 @@ else
 	apt install tor -y
 fi
 
-# Create HiddenService dir within /var/lib/tor and change both permissions and ownership
-if ! [ -e "$TOR_HS" ]; then
-	echo "Creating $hsdir HiddenService directory and setting permissions"
-	mkdir $TOR_HS
-	chmod 700 $TOR_HS
-	chown -R debian-tor:debian-tor $TOR_HS
-fi
-
 # Step 3: Edit torrc file
 cp /etc/tor/torrc /etc/tor/torrc.old
 # Check if already configured
